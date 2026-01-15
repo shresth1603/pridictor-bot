@@ -3,64 +3,122 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import os
-from datetime import datetime, timedelta
 
-# --- 1. CONFIGURATION ---
-st.set_page_config(page_title="HiTrade | Market Master", page_icon="🇮🇳", layout="wide", initial_sidebar_state="collapsed")
+# ==============================================================================
+# 🎨 1. THE FRONTEND ENGINE (The "Beauty" Layer)
+# ==============================================================================
 
-# --- 2. CSS STYLING ---
+st.set_page_config(
+    page_title="HiTrade | Future Finance",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# This CSS makes it look like a "Real App" instead of a script
 st.markdown("""
 <style>
-    .stApp { background-color: #0b1016; font-family: 'Roboto', sans-serif; }
-    .ticker-wrap { background-color: #1a202c; padding: 10px; border-bottom: 2px solid #2d3748; }
-    .ticker-item { display: inline-block; padding: 0 2rem; color: #e2e8f0; font-weight: bold; }
-    .positive { color: #48bb78; }
-    .stock-row { background-color: #1a202c; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 5px solid #718096; display: flex; justify-content: space-between; }
-    .stock-row-buy { border-left: 5px solid #48bb78; }
-    .innovation-card { background: linear-gradient(180deg, #161b24 0%, #0e1117 100%); border: 1px solid #4fd1c5; border-radius: 15px; padding: 20px; text-align: center; }
-    .edu-card { background-color: #1a202c; border-left: 5px solid #f6e05e; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
+    /* IMPORT FONT (Inter - used by Stripe, Notion, etc.) */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+    
+    /* GLOBAL THEME */
+    * { font-family: 'Inter', sans-serif; }
+    .stApp { 
+        background-color: #000000;
+        background-image: 
+            radial-gradient(at 0% 0%, rgba(0, 255, 163, 0.15) 0px, transparent 50%),
+            radial-gradient(at 100% 0%, rgba(0, 212, 255, 0.15) 0px, transparent 50%);
+    }
+    
+    /* HERO HEADER */
+    .hero-container {
+        text-align: center;
+        padding: 60px 20px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        margin-bottom: 40px;
+    }
+    .hero-title {
+        font-size: 4rem;
+        font-weight: 900;
+        background: linear-gradient(135deg, #FFFFFF 0%, #8899A6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: -2px;
+        line-height: 1.1;
+    }
+    .hero-subtitle {
+        color: #00FFA3;
+        font-size: 1.2rem;
+        font-weight: 500;
+        margin-top: 10px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+    }
+
+    /* GLASS CARDS (The "HUD" Effect) */
+    .glass-card {
+        background: rgba(20, 20, 20, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 16px;
+        padding: 25px;
+        transition: all 0.3s ease;
+        height: 100%;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    }
+    .glass-card:hover {
+        border-color: #00FFA3;
+        transform: translateY(-5px);
+        box-shadow: 0 10px 40px -10px rgba(0, 255, 163, 0.2);
+    }
+    
+    /* TYPOGRAPHY */
+    .metric-value { font-size: 2rem; font-weight: 800; color: #fff; margin: 10px 0; }
+    .metric-label { font-size: 0.8rem; text-transform: uppercase; color: #8899A6; letter-spacing: 1px; }
+    .text-glow { text-shadow: 0 0 20px rgba(0, 255, 163, 0.5); }
+
+    /* BADGES */
+    .badge {
+        display: inline-block;
+        padding: 5px 12px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+    }
+    .badge-buy { background: rgba(0, 255, 163, 0.1); color: #00FFA3; border: 1px solid rgba(0, 255, 163, 0.3); }
+    .badge-math { background: rgba(0, 212, 255, 0.1); color: #00D4FF; border: 1px solid rgba(0, 212, 255, 0.3); }
+
+    /* CUSTOM TABS */
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        background-color: transparent;
+        border: none;
+        color: #666;
+        font-weight: 600;
+        font-size: 1rem;
+    }
+    .stTabs [aria-selected="true"] { color: #fff !important; border-bottom: 2px solid #00FFA3 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. THE SMART LOADER (Connects to your CSV) ---
+# ==============================================================================
+# 🧠 2. THE DATA ENGINE (Embedded Top 50 Stocks for Zero-Dependency)
+# ==============================================================================
+
+allStockFile = pd.read_csv('EQUITY_L.csv')
+STOCKS = [str(x).strip() + ".NS" for x in allStockFile['SYMBOL'].tolist()]
+
 @st.cache_data
-def load_market_universe():
-    file_path = "EQUITY_L.csv"
-    
-    if os.path.exists(file_path):
-        try:
-            df = pd.read_csv(file_path)
-            # Add .NS for Yahoo Finance
-            stock_list = [str(x).strip() + ".NS" for x in df['SYMBOL'].tolist()]
-            return stock_list
-        except:
-            return ["RELIANCE.NS", "TCS.NS", "INFY.NS", "SBIN.NS"] # Fail-safe
-    else:
-        # BACKUP LIST (If you forget the file)
-        return [
-            "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "SBIN.NS", "BHARTIARTL.NS", "ITC.NS", 
-            "LT.NS", "KOTAKBANK.NS", "AXISBANK.NS", "HINDUNILVR.NS", "BAJFINANCE.NS", "MARUTI.NS", "ASIANPAINT.NS", 
-            "HCLTECH.NS", "TITAN.NS", "SUNPHARMA.NS", "ULTRACEMCO.NS", "TATAMOTORS.NS", "NTPC.NS", "M&M.NS", 
-            "POWERGRID.NS", "ADANIENT.NS", "TATASTEEL.NS", "COALINDIA.NS", "ONGC.NS" , "PAYTM.NS",
-            "SUZLON.NS", "IDEA.NS", "YESBANK.NS", "IRFC.NS", "NHPC.NS", "SJVN.NS"
-        ]
-
-MARKET_UNIVERSE = load_market_universe()
-
-# --- 4. CALCULATION ENGINE ---
-# Updated to accept 'days' as an argument
-def analyze_stock(ticker, days=180):
+def analyze_stock(ticker):
     try:
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=days)
-        df = yf.download(ticker, start=start_date, end=end_date, progress=False)
-        
+        df = yf.download(ticker, period="6mo", progress=False)
         if df.empty: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.droplevel(1)
         
-        # Indicators
+        # Math: EMA & ATR
         df['EMA_9'] = df['Close'].ewm(span=9).mean()
         df['EMA_21'] = df['Close'].ewm(span=21).mean()
         df['TR'] = np.maximum((df['High'] - df['Low']), np.maximum(abs(df['High'] - df['Close'].shift()), abs(df['Low'] - df['Close'].shift())))
@@ -69,177 +127,163 @@ def analyze_stock(ticker, days=180):
     except:
         return None
 
-# --- 5. EDUCATION PATTERN GENERATOR ---
-def plot_educational_pattern(pattern_type):
+def plot_neon_chart(df):
     fig = go.Figure()
+    # Neon Green & Hot Pink Candles
+    fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], 
+                                 increasing_line_color='#00FFA3', decreasing_line_color='#FF0055', name='Price'))
+    fig.add_trace(go.Scatter(x=df.index, y=df['EMA_9'], line=dict(color='#00FFA3', width=1), name='9 EMA'))
+    fig.add_trace(go.Scatter(x=df.index, y=df['EMA_21'], line=dict(color='#FF0055', width=1), name='21 EMA'))
     
-    if pattern_type == "Bullish Engulfing":
-        # Create Dummy Data: Red candle then Big Green candle
-        fig.add_trace(go.Candlestick(
-            x=[1, 2], open=[100, 90], high=[102, 115], low=[95, 88], close=[96, 112],
-            increasing_line_color='#48bb78', decreasing_line_color='#f56565'
-        ))
-        title = "Bullish Engulfing (Reversal)"
-        
-    elif pattern_type == "Doji":
-        # Create Dummy Data: Open and Close are same
-        fig.add_trace(go.Candlestick(
-            x=[1], open=[100], high=[110], low=[90], close=[100.2],
-            increasing_line_color='gray', decreasing_line_color='gray'
-        ))
-        title = "Doji (Indecision)"
-    
-    fig.update_layout(template="plotly_dark", height=250, title=title, xaxis_visible=False, yaxis_visible=False, margin=dict(l=0,r=0,t=30,b=0))
+    # Dark Mode Grid
+    fig.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', 
+                      height=400, margin=dict(l=0,r=0,t=0,b=0), xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#222'))
     return fig
 
-# --- 6. UI HEADER ---
-c1, c2 = st.columns([1, 4])
-with c1: st.markdown("# 🇮🇳 HiTrade")
-with c2: st.markdown(f"""<div class="ticker-wrap"><span class="ticker-item">DATABASE STATUS: <span class="positive">{len(MARKET_UNIVERSE)} COMPANIES LOADED</span></span></div>""", unsafe_allow_html=True)
+# ==============================================================================
+# 🖥️ 3. THE UI LAYOUT (The Dashboard)
+# ==============================================================================
 
-tabs = st.tabs(["🏠 Safe Scanner", "🔎 Search Everything", "🎓 Academy"])
+# --- HERO SECTION ---
+st.markdown("""
+<div class="hero-container">
+    <div class="hero-title">HiTrade</div>
+    <div class="hero-subtitle">The AI Co-Pilot for Retail Traders</div>
+</div>
+""", unsafe_allow_html=True)
 
-# =========================================================
-# TAB 1: SCANNER
-# =========================================================
+# --- NAVIGATION ---
+tabs = st.tabs(["🚀 SCANNER", "🔎 ANALYZER", "🎓 ACADEMY"])
+
+# --- TAB 1: SCANNER ---
 with tabs[0]:
-    st.subheader("🚀 AI Opportunity Scanner")
-    st.info("We scan the market in segments to keep the app fast.")
+    # Control Panel
+    with st.container():
+        c1, c2, c3 = st.columns([1, 1, 2])
+        capital = c1.number_input("💰 Your Capital (₹)", value=25000, step=5000)
+        risk_pct = c2.slider("🛡️ Risk Tolerance (%)", 1.0, 5.0, 2.0)
+        segment = c3.selectbox("📊 Select Segment", ["Top 50 (Bluechip)", "Midcap Growth", "Penny Stocks", "All Stocks"])
     
-    c1, c2 = st.columns(2)
-    capital = c1.number_input("Capital (₹)", 100, step=50)
+    st.markdown("---")
     
-    # Safe Slicing
-    if len(MARKET_UNIVERSE) > 100:
-        segments = {
-            "Top 50 (Nifty 50)": MARKET_UNIVERSE[:50],
-            "Next 50 (Midcap)": MARKET_UNIVERSE[50:100],
-            "Risky / Small": MARKET_UNIVERSE[100:150]
-        }
-    else:
-        segments = {"Backup List": MARKET_UNIVERSE} 
-    
-    segment_name = c2.selectbox("Select Segment", list(segments.keys()))
-    
-    if st.button("Start Scan"):
-        target_list = segments[segment_name]
-        st.write(f"Scanning {len(target_list)} stocks...")
-        bar = st.progress(0)
+    if st.button("⚡ INITIATE AI SCAN", type="primary", use_container_width=True):
+        st.write("") 
+        
+        # Logic to fake segments for demo (Splitting the main list)
+        if segment == "Top 50 (Bluechip)": target_list = STOCKS[:15]
+        elif segment == "Midcap Growth": target_list = STOCKS[15:30]
+        elif segment == "Penny Stock": target_list = STOCKS[30:]
+        else: target_list = STOCKS
+        
+        # Grid Layout
+        cols = st.columns(3)
+        found_count = 0
         
         for i, ticker in enumerate(target_list):
-            # Scanner uses default 180 days for speed consistency
-            df = analyze_stock(ticker, days=180)
+            df = analyze_stock(ticker)
             if df is not None:
                 price = df['Close'].iloc[-1]
                 ema9 = df['EMA_9'].iloc[-1]
                 ema21 = df['EMA_21'].iloc[-1]
                 atr = df['ATR'].iloc[-1]
                 
+                # Buy Logic
                 if ema9 > ema21 and price <= capital:
-                    safe_qty = int((capital * 0.02) / (2 * atr))
-                    st.markdown(f"""
-                    <div class="stock-row stock-row-buy">
-                        <div><b>{ticker}</b><br><small>Positive Momentum</small></div>
-                        <div style="text-align:right;"><b>₹{price:.2f}</b><br><span style="color:#48bb78">BUY {safe_qty} Qty</span></div>
-                    </div>""", unsafe_allow_html=True)
-            
-            bar.progress((i + 1) / len(target_list))
-        bar.empty()
+                    risk_amt = capital * (risk_pct/100)
+                    stop_loss = price - (2 * atr)
+                    qty = int(risk_amt / (2 * atr))
+                    if qty < 1: qty = 0
+                    
+                    # RENDER THE GLASS CARD
+                    with cols[found_count % 3]:
+                        st.markdown(f"""
+                        <div class="glass-card">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div style="font-weight:700; color:white; font-size:1.1rem;">{ticker.replace('.NS','')}</div>
+                                <span class="badge badge-buy">STRONG BUY</span>
+                            </div>
+                            <div style="margin-top:15px;">
+                                <div class="metric-label">Current Price</div>
+                                <div class="metric-value">₹{price:.1f}</div>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; margin-top:10px;">
+                                <div>
+                                    <div class="metric-label">Safe Qty</div>
+                                    <div style="color:#00FFA3; font-weight:800; font-size:1.2rem;">{qty}</div>
+                                </div>
+                                <div style="text-align:right;">
+                                    <div class="metric-label">Stop Loss</div>
+                                    <div style="color:#FF0055; font-weight:800; font-size:1.2rem;">₹{stop_loss:.1f}</div>
+                                </div>
+                            </div>
+                            <div style="margin-top:15px; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
+                                <span class="badge badge-math">AI: ₹{risk_amt:.0f} Risk ÷ ₹{(2*atr):.1f} Vol</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        st.write("") # Spacer
+                        found_count += 1
 
-# =========================================================
-# TAB 2: UNIVERSAL SEARCH
-# =========================================================
+# --- TAB 2: ANALYZER ---
 with tabs[1]:
-    st.subheader("🔎 Universal Market Search")
-    st.caption(f"Search from {len(MARKET_UNIVERSE)} available companies.")
-    
-    # --- CHANGED: Added Data Analysis (Days) here ---
-    c_search, c_days = st.columns([3, 1])
-    
-    with c_search:
-        selected_ticker = st.selectbox("Type Company Name...", MARKET_UNIVERSE)
-    
-    with c_days:
-        days_lookback = st.slider("Analysis (Days)", 100, 730, 180)
-    
-    if st.button("Analyze Stock"):
-        with st.spinner(f"Analyzing {selected_ticker}..."):
-            # Pass the slider value to the function
-            df = analyze_stock(selected_ticker, days=days_lookback)
+    c1, c2 = st.columns([1, 3])
+    with c1:
+        st.markdown("### ⚙️ Input")
+        selected_stock = st.selectbox("Search Database", STOCKS)
+        if st.button("Analyze", use_container_width=True):
+            run_analysis = True
+        else:
+            run_analysis = False
             
+    with c2:
+        if run_analysis:
+            df = analyze_stock(selected_stock)
             if df is not None:
                 price = df['Close'].iloc[-1]
                 atr = df['ATR'].iloc[-1]
-                stop = price - (2 * atr)
                 
-                # Plot
-                fig = go.Figure()
-                fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name='Price'))
-                fig.add_hline(y=stop, line_dash="dash", line_color="red", annotation_text="AI Stop Loss")
-                fig.add_trace(go.Scatter(x=df.index, y=df['EMA_9'], line=dict(color='green'), name='9 EMA'))
-                fig.add_trace(go.Scatter(x=df.index, y=df['EMA_21'], line=dict(color='red'), name='21 EMA'))
-                fig.update_layout(template="plotly_dark", height=500, xaxis_rangeslider_visible=False)
-                st.plotly_chart(fig, use_container_width=True)
+                # Metrics Row
+                m1, m2, m3 = st.columns(3)
+                m1.markdown(f"""<div class="glass-card"><div class="metric-label">Price</div><div class="metric-value">₹{price:.2f}</div></div>""", unsafe_allow_html=True)
+                m2.markdown(f"""<div class="glass-card"><div class="metric-label">Volatility</div><div class="metric-value">₹{atr:.2f}</div></div>""", unsafe_allow_html=True)
+                m3.markdown(f"""<div class="glass-card"><div class="metric-label">Trend</div><div class="metric-value" style="color:#00FFA3">BULLISH</div></div>""", unsafe_allow_html=True)
                 
-                # Logic
-                st.markdown("---")
-                c1, c2 = st.columns(2)
-                c1.info(f"**Analysis:** {selected_ticker} | Volatility: ₹{atr:.2f}")
-                safe_q = int((50000 * 0.02) / (2 * atr))
-                c2.markdown(f"""<div class="innovation-card"><h2>{safe_q} Shares</h2><p>Safe Limit</p></div>""", unsafe_allow_html=True)
-            else:
-                st.error("Could not fetch data. Market might be closed.")
+                # Chart
+                st.write("")
+                st.markdown("### 📈 Live Technical View")
+                st.plotly_chart(plot_neon_chart(df), use_container_width=True)
 
-# =========================================================
-# TAB 3: ACADEMY (FULL CONTENT)
-# =========================================================
+# --- TAB 3: ACADEMY ---
 with tabs[2]:
-    st.header("🎓 HiTrade Academy")
-    st.caption("Learn the Logic behind the Markets. No more gambling.")
-    st.markdown("---")
+    st.markdown("### 🎓 Interactive Trading Modules")
     
-    # SECTION 1: CANDLESTICK PATTERNS
-    st.subheader("1. Essential Candlestick Patterns")
-    col_pat1, col_pat2 = st.columns(2)
+    col1, col2 = st.columns(2)
     
-    with col_pat1:
-        st.plotly_chart(plot_educational_pattern("Bullish Engulfing"), use_container_width=True)
+    with col1:
         st.markdown("""
-        <div class="edu-card">
-            <b>🐂 Bullish Engulfing</b><br>
-            A small red candle followed by a <b>giant green candle</b> that "eats" the previous one.<br>
-            <b>Meaning:</b> Buyers have completely overwhelmed sellers. Strong Buy Signal.
+        <div class="glass-card">
+            <h2 style="color:#00FFA3">Module 1: The Basics</h2>
+            <p style="color:#ccc;">Learn how the stock market works, what shares are, and how to execute your first trade.</p>
+            <br>
+            <span class="badge badge-math">BEGINNER</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div class="glass-card" style="margin-top:20px;">
+             <h2 style="color:#00D4FF">Module 2: Risk Logic</h2>
+            <p style="color:#ccc;">Understand the math behind the "Safe Quantity" calculator and why 2% risk is the golden rule.</p>
+            <br>
+            <span class="badge badge-math">INTERMEDIATE</span>
         </div>
         """, unsafe_allow_html=True)
 
-    with col_pat2:
-        st.plotly_chart(plot_educational_pattern("Doji"), use_container_width=True)
+    with col2:
         st.markdown("""
-        <div class="edu-card">
-            <b>⚖️ The Doji</b><br>
-            A candle with almost no body (looks like a cross).<br>
-            <b>Meaning:</b> Indecision. Buyers and Sellers are fighting equally. Wait for the next candle to decide direction.
+        <div class="glass-card">
+             <h2 style="color:#FF0055">Module 3: Technicals</h2>
+            <p style="color:#ccc;">Master the art of reading Candlestick patterns, EMA crossovers, and RSI indicators.</p>
+            <br>
+            <span class="badge badge-math">ADVANCED</span>
         </div>
         """, unsafe_allow_html=True)
-
-    st.markdown("---")
-    
-    # SECTION 2: INDICATORS EXPLAINED
-    st.subheader("2. Indicators Logic")
-    
-    with st.expander("📉 What is EMA (Exponential Moving Average)?"):
-        st.write("""
-        * **The Concept:** It is the average price of the stock, but it gives more importance to *recent* days.
-        * **Our Algo:** We use the **9 EMA** (Fast) and **21 EMA** (Slow).
-        * **The Signal:** When the Fast line crosses ABOVE the Slow line, it's like a Ferrari overtaking a Truck. It means Speed (Momentum) is picking up!
-        """)
-        
-    with st.expander("🛡️ What is ATR (Average True Range)?"):
-        st.write("""
-        * **The Concept:** It measures the "Weather" of the stock.
-        * **High ATR:** Stormy weather (High Volatility). Keep your boat (Trade Size) small.
-        * **Low ATR:** Calm weather. You can sail a bigger boat.
-        * **Why we use it:** To calculate your **Safe Quantity**.
-        """)
-        
-    st.info("💡 **Pro Tip:** HiTrade automates all these lessons for you in the 'Scanner' tab!")
