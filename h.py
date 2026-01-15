@@ -15,6 +15,12 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+with st.sidebar:
+    st.markdown("### 🛠️ Global Settings")
+    capital = st.number_input("💰 Your Capital (₹)", value=25000, step=5000)
+    risk_pct = st.slider("🛡️ Risk Tolerance (%)", 1.0, 5.0, 2.0)
+    st.info(f"Total Risk per trade: ₹{(capital * risk_pct / 100):.2f}")
+
 # This CSS makes it look like a "Real App" instead of a script
 st.markdown("""
 <style>
@@ -108,8 +114,8 @@ st.markdown("""
 # 🧠 2. THE DATA ENGINE (Embedded Top 50 Stocks for Zero-Dependency)
 # ==============================================================================
 
-allStockFile = pd.read_csv('EQUITY_L.csv')
-STOCKS = [str(x).strip() + ".NS" for x in allStockFile['SYMBOL'].tolist()]
+file = pd.read_csv('EQUITY_L.csv')
+STOCKS = [str(x).strip() + ".NS" for x in file['SYMBOL'].tolist()]
 
 @st.cache_data
 def analyze_stock(ticker):
@@ -229,25 +235,53 @@ with tabs[1]:
     c1, c2 = st.columns([1, 3])
     with c1:
         st.markdown("### ⚙️ Input")
-        selected_stock = st.selectbox("Search Database", STOCKS)
-        if st.button("Analyze", use_container_width=True):
-            run_analysis = True
-        else:
-            run_analysis = False
+        selected_stock = st.selectbox("Search Database", STOCKS, key="analyzer_stock")
+        analyze_btn = st.button("Analyze", use_container_width=True)
             
     with c2:
-        if run_analysis:
+        if analyze_btn:
             df = analyze_stock(selected_stock)
             if df is not None:
-                price = df['Close'].iloc[-1]
-                atr = df['ATR'].iloc[-1]
+                price = float(df['Close'].iloc[-1])
+                atr = float(df['ATR'].iloc[-1])
                 
-                # Metrics Row
+                # --- CALCULATIONS ---
+                risk_amount = capital * (risk_pct / 100)
+                # Stop Loss is set at 2x ATR (Volatility) below current price
+                stop_loss = price - (2 * atr)
+                risk_per_share = price - stop_loss
+                
+                # Quantity = Total Risk / Risk Per Share
+                if risk_per_share > 0:
+                    safe_qty = int(risk_amount / risk_per_share)
+                else:
+                    safe_qty = 0
+                
+                # --- UI: METRICS ROW ---
                 m1, m2, m3 = st.columns(3)
                 m1.markdown(f"""<div class="glass-card"><div class="metric-label">Price</div><div class="metric-value">₹{price:.2f}</div></div>""", unsafe_allow_html=True)
-                m2.markdown(f"""<div class="glass-card"><div class="metric-label">Volatility</div><div class="metric-value">₹{atr:.2f}</div></div>""", unsafe_allow_html=True)
-                m3.markdown(f"""<div class="glass-card"><div class="metric-label">Trend</div><div class="metric-value" style="color:#00FFA3">BULLISH</div></div>""", unsafe_allow_html=True)
+                m2.markdown(f"""<div class="glass-card"><div class="metric-label">Stop Loss</div><div class="metric-value" style="color:#FF0055">₹{stop_loss:.2f}</div></div>""", unsafe_allow_html=True)
+                m3.markdown(f"""<div class="glass-card"><div class="metric-label">Safe Quantity</div><div class="metric-value" style="color:#00FFA3">{safe_qty} Units</div></div>""", unsafe_allow_html=True)
                 
+                # --- UI: REASONING BOX ---
+                st.write("")
+                st.markdown(f"""
+                <div class="glass-card">
+                    <h4 style="color:#00D4FF; margin-top:0;">💡 Why only {safe_qty} shares?</h4>
+                    <p style="color:#ccc; font-size:0.9rem; line-height:1.6;">
+                        This quantity is calculated using <b>Scientific Position Sizing</b>. 
+                        Even if the stock price drops to your stop loss of <b>₹{stop_loss:.2f}</b> (based on 2x market volatility), 
+                        your total loss will be limited to <b>₹{risk_amount:.2f}</b> ({risk_pct}% of your capital).
+                    </p>
+                    <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; border-left:3px solid #00FFA3;">
+                        <code style="color:#00FFA3; background:transparent;">
+                        Qty = (Capital × Risk%) ÷ (Entry - StopLoss) <br>
+                        Qty = {risk_amount:.0f} ÷ {risk_per_share:.2f} ≈ {safe_qty}
+                        </code>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
                 # Chart
                 st.write("")
                 st.markdown("### 📈 Live Technical View")
